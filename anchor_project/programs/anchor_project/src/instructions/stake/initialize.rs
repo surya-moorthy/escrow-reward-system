@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 
-use crate::stake::StakeAccount;
+use crate::state::stake::StakeAccount;
+
 
 pub fn init_handler(ctx: Context<InitializeState>) -> Result<()> {
     

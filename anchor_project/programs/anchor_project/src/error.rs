@@ -15,4 +15,6 @@ pub enum StakeError {
     Underflow,
     #[msg("Invalid timestamp")]
     InvalidTimestamp,
+    #[msg("Stake is locked")]
+    StakeLocked
 }

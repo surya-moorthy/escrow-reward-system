@@ -1,7 +1,5 @@
-pub mod initialize;
-pub mod stakesol;
-pub mod unstakesol;
+pub mod stake;
+pub mod tokenpool;
 
-pub use initialize::*;
-pub use stakesol::*;
-pub use unstakesol::*;
+pub use stake::*;
+pub use tokenpool::*;

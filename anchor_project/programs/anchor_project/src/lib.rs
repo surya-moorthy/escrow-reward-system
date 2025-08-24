@@ -6,13 +6,15 @@ pub mod state;
 use anchor_lang::prelude::*;
 
 pub use constants::*;
-pub use instructions::*;
 pub use state::*;
 
 declare_id!("HqPFKnfyYcEVkPkfg883mhu2YgPMKWt7sZQTFmZRXAC9");
 
 #[program]
 pub mod anchor_project {
+
+    use crate::instructions::InitializeState;
+
     use super::*;
 
     pub fn initialize(ctx: Context<InitializeState>) -> Result<()> {
@@ -20,10 +22,23 @@ pub mod anchor_project {
     }
 
     pub fn deposit_sol(ctx : Context<Stake>,amount : u64) -> Result<()> {
-        stakesol::deposit_handler(ctx,amount)
+        stakesol::stake(ctx,amount)
     }
 
-    pub fn unstake_sol(ctx : Context<UnStake>) -> Result<()> {
-        unstakesol::unstake_handler(ctx)
+    pub fn unstake_sol(ctx : Context<Unstake>,amount: u64) -> Result<()> {
+        unstakesol::unstake(ctx,amount)
     }
+
+     pub fn initialize_pool(ctx : Context<InitializePool>,reward_rate: u64,lock_duration: i64) -> Result<()> {
+        initpool::initialize_pool(ctx,reward_rate,lock_duration)
+    }
+
+     pub fn close_pool(ctx : Context<ClosePool>) -> Result<()> {
+        closepool::close_pool(ctx)
+    }
+
+     pub fn fund_treasury(ctx : Context<FundTreasury>,amount: u64) -> Result<()> {
+        fundtreasury::fund_treasury(ctx,amount)
+    }
+    
 }
