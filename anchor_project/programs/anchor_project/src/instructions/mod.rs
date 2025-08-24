@@ -1,7 +1,7 @@
 pub mod initialize;
-pub mod depositsol;
+pub mod stakesol;
 pub mod unstakesol;
 
 pub use initialize::*;
-pub use depositsol::*;
+pub use stakesol::*;
 pub use unstakesol::*;
