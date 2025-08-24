@@ -16,5 +16,7 @@ pub enum StakeError {
     #[msg("Invalid timestamp")]
     InvalidTimestamp,
     #[msg("Stake is locked")]
-    StakeLocked
+    StakeLocked,
+    #[msg("Given time is invalid")]
+    InvalidTime
 }

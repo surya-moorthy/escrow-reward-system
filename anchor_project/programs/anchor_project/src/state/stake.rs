@@ -22,3 +22,7 @@ pub struct StakeAccount {
     pub bump: u8,          // bump for this StakeAccount
     pub vault_bump: u8,    // bump for the token vault PDA
 }
+
+impl StakeAccount {
+    pub const LEN: usize = 8 + 32 + 32 + 8 + 16 + 8 + 8 + 1;
+}

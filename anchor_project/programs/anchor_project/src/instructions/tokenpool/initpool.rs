@@ -16,7 +16,7 @@ pub fn initialize_pool(
     pool.staking_mint = ctx.accounts.staking_mint.key();
     pool.reward_rate = reward_rate;
     pool.lock_duration = lock_duration;
-    pool.bump = ctx.bumps.pool;
+    pool.pool_bump = ctx.bumps.pool;
 
     Ok(())
 }

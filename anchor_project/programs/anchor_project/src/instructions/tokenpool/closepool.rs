@@ -28,7 +28,7 @@ pub struct ClosePool<'info> {
         mut,
         close = admin,
         seeds = [b"pool", pool.staking_mint.as_ref()],
-        bump = pool.bump
+        bump = pool.pool_bump
     )]
     pub pool: Account<'info, Pool>,
 

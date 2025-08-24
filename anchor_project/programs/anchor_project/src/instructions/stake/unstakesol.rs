@@ -1,5 +1,5 @@
 use anchor_lang::{prelude::*, system_program};
-use crate::{pool::Pool, state::stake::StakeAccount, update_points};
+use crate::{calculate_reward, pool::Pool, state::stake::StakeAccount, update_points};
 use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 
 use crate::error::StakeError;
@@ -25,9 +25,12 @@ pub fn unstake(ctx: Context<Unstake>, amount: u64) -> Result<()> {
     // -------------------------------
     // 1. Transfer SPL tokens back to user
     // -------------------------------
+
+    let owner_key = ctx.accounts.owner.key();
+    
     let seeds = &[
         b"vault",
-        ctx.accounts.owner.key().as_ref(),
+        owner_key.as_ref(),
         &[pda_account.bump],
     ];
     let signer = &[&seeds[..]];
@@ -46,10 +49,19 @@ pub fn unstake(ctx: Context<Unstake>, amount: u64) -> Result<()> {
     // -------------------------------
     // 2. Send SOL rewards from treasury to user
     // -------------------------------
-    let seeds = &[b"treasury", &[ctx.accounts.pool.bump]];
+    let stake_key = ctx.accounts.pool.key(); // now it's owned and lives longer
+
+    let seeds: &[&[u8]] = &[
+        b"stake",
+        stake_key.as_ref(),            // borrow from owned variable
+        &[pda_account.bump],
+    ];
+
     let signer = &[&seeds[..]];
 
-    let reward_amount = calculate_reward(amount, pda_account, clock.unix_timestamp)?;
+
+    let reward_amount = calculate_reward(amount, pda_account, clock.unix_timestamp,&ctx.accounts.pool)?;
+    
     let cpi_ctx = CpiContext::new_with_signer(
         ctx.accounts.system_program.to_account_info(),
         system_program::Transfer {

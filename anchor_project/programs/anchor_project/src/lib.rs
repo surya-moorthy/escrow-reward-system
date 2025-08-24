@@ -6,14 +6,13 @@ pub mod state;
 use anchor_lang::prelude::*;
 
 pub use constants::*;
+pub use instructions::*;
 pub use state::*;
 
 declare_id!("HqPFKnfyYcEVkPkfg883mhu2YgPMKWt7sZQTFmZRXAC9");
 
 #[program]
 pub mod anchor_project {
-
-    use crate::instructions::InitializeState;
 
     use super::*;
 
