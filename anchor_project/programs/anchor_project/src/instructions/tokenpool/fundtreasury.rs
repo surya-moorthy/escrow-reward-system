@@ -30,7 +30,7 @@ pub struct FundTreasury<'info> {
     #[account(
         mut,
         seeds = [b"pool", pool.staking_mint.as_ref()],
-        bump = pool.pool_bump
+        bump = pool.treasury_bump
     )]
     pub pool: Account<'info, Pool>,
 
