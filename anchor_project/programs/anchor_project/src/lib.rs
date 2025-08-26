@@ -5,8 +5,8 @@ pub mod state;
 
 use anchor_lang::prelude::*;
 
-pub use constants::*;
 pub use instructions::*;
+pub use constants::*;
 pub use state::*;
 
 declare_id!("HqPFKnfyYcEVkPkfg883mhu2YgPMKWt7sZQTFmZRXAC9");
@@ -38,6 +38,10 @@ pub mod anchor_project {
 
      pub fn fund_treasury(ctx : Context<FundTreasury>,amount: u64) -> Result<()> {
         fundtreasury::fund_treasury(ctx,amount)
+    }
+
+    pub fn update_admin(ctx : Context<UpdateAdmin>,new_admin: Pubkey) -> Result<()> {
+       updateadmin::update_admin(ctx, new_admin)
     }
     
 }

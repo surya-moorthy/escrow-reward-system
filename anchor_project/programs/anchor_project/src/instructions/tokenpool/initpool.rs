@@ -1,6 +1,5 @@
 
 use anchor_lang::prelude::*;
-
 use anchor_spl::token::Mint;
 
 use crate::pool::{Pool, Treasury};
@@ -45,7 +44,7 @@ pub pool: Account<'info, Pool>,
 #[account(
 init,
 payer = admin,
-space = 8, // discriminator only
+space = 8 + 1, // discriminator only
 seeds = [b"treasury", pool.key().as_ref()],
 bump
 )]
@@ -53,7 +52,7 @@ pub treasury: Account<'info, Treasury>,
 
 
 /// Staking mint associated to this pool
-pub staking_mint: AccountInfo<'info>,
+pub staking_mint:  Account<'info, Mint>,
 
 
 pub system_program: Program<'info, System>,
