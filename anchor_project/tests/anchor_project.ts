@@ -1,82 +1,376 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import { AnchorProject } from "../target/types/anchor_project";
+import { assert, expect } from "chai";
+import { PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID, createAccount, createInitializeAccountInstruction, createMint, getOrCreateAssociatedTokenAccount, mintTo } from "@solana/spl-token";
+import { AnchorProject } from "../target/types/anchor_project"; // update name
 
-describe("anchor_project", () => {
-  anchor.setProvider(anchor.AnchorProvider.env());
-  const program = anchor.workspace.anchorProject as Program<AnchorProject>;
+describe("staking program", () => {
+  const provider = anchor.AnchorProvider.env();
+  anchor.setProvider(provider);
+  const program = anchor.workspace.AnchorProject as Program<AnchorProject>;
+  const wallet = provider.wallet as anchor.Wallet;
+
+  let stakingMint: anchor.web3.PublicKey;
+  let wrongMint: anchor.web3.PublicKey;
+  let userTokenAccount: anchor.web3.PublicKey;
+  let stakeAccountPda: anchor.web3.PublicKey;
+  let vaultTokenPda: anchor.web3.PublicKey;
 
   // -----------------------
-  // 1. Pool Initialization + Stake
+  // 1. Initialize
   // -----------------------
-    describe("initialize the escrow pool", () => {
-      it("works with valid admin + reward_mint", async () => {});
-      it("fails if called twice with same seeds", async () => {});
-      it("fails if admin signer is not provided", async () => {});
+  describe("initialize", () => {
+    before(async () => {
+      // Create staking token mint
+      stakingMint = await createMint(
+        provider.connection,
+        wallet.payer,
+        wallet.publicKey,
+        null,
+        9
+      );
+
+      wrongMint = await createMint(
+        provider.connection,
+        wallet.payer,
+        wallet.publicKey,
+        null,
+        9
+      );
     });
 
-    describe("initialize stake account", () => {
     it("works with valid user", async () => {
-      // Arrange: setup user wallet, escrow pool, stake mint
-      // Act: call initialize_stake
-      // Assert: check stake account PDA exists with expected data
-    }); // Arrange: setup user wallet, escrow pool, stake mint
-      // Act: call initialize_stake
-      // Assert: check stake account PDA exists with expected data
+      [stakeAccountPda] = anchor.web3.PublicKey.findProgramAddressSync(
+        [Buffer.from("stake"), wallet.publicKey.toBuffer()],
+        program.programId
+      );
+      [vaultTokenPda] = anchor.web3.PublicKey.findProgramAddressSync(
+        [Buffer.from("vault"), wallet.publicKey.toBuffer()],
+        program.programId
+      );
+
+      await program.methods
+        .initialize()
+        .accounts({
+          signer: wallet.publicKey,
+          stakingMint,
+        })
+        .rpc();
+
+      const stakeAccount = await program.account.stakeAccount.fetch(stakeAccountPda);
+      assert.ok(stakeAccount.owner.equals(wallet.publicKey));
+      assert.equal(stakeAccount.stakedAmount.toNumber(), 0);
+    });
 
     it("fails if called twice with same seeds", async () => {
-      // Arrange: first initialize works
-      // Act: call initialize_stake again with same seeds
-      // Assert: transaction should throw AnchorError
+      try {
+        await program.methods
+          .initialize()
+          .accounts({
+            signer: wallet.publicKey,
+            stakingMint,
+          })
+          .rpc();
+        assert.fail("Expected an error but transaction succeeded");
+      } catch (err) {
+        expect(err.toString()).to.include("already in use");
+      }
     });
 
     it("fails if user signer is not provided", async () => {
-      // Arrange: do not include user as signer
-      // Act + Assert: expect error
+      const fakeUser = anchor.web3.Keypair.generate();
+      try {
+        await program.methods
+          .initialize()
+          .accounts({
+            signer: fakeUser.publicKey,
+            stakingMint,
+          })
+          .rpc();
+        assert.fail("Expected signer missing error");
+      } catch (err) {
+        expect(err.toString()).to.include("Signature verification failed");
+      }
     });
 
-    it("fails if escrow pool is not valid", async () => {
-      // Arrange: pass in a wrong pool address
-      // Act + Assert: expect error
+    it("fails if stake mint does not match", async () => {
+      try {
+        await program.methods
+          .initialize()
+          .accounts({
+            signer: wallet.publicKey,
+            stakingMint: wrongMint,
+           
+          })
+          .rpc();
+        assert.fail("Expected mint mismatch error");
+      } catch (err) {
+        expect(err.toString()).to.satisfy((msg: string) =>
+          msg.includes("ConstraintTokenMint") ||
+          msg.includes("ConstraintSeeds") ||
+          msg.includes("Simulation failed")
+        );
+      }
     });
-
-    it("fails if stake mint does not match escrow pool mint", async () => {
-      // Arrange: pass in mismatched stake mint
-      // Act + Assert: expect error
-    });
-  });
-
 
   // -----------------------
   // 2. Stake Flow
   // -----------------------
   describe("stake the token", () => {
-    it("succeeds when user has enough tokens", async () => {});
-    it("fails if amount = 0", async () => {});
-    it("fails if user doesn’t have enough balance", async () => {});
-    it("updates staked_amount and recent_update_time", async () => {});
-    it("multiple stakes add up correctly", async () => {});
-  });
+    before(async () => {
+      // Mint some tokens to user ATA
+      userTokenAccount = (
+        await getOrCreateAssociatedTokenAccount(
+          provider.connection,
+          wallet.payer,
+          stakingMint,
+          wallet.publicKey
+        )
+      ).address;
 
-  // -----------------------
-  // 3. Reward Accrual
-  // -----------------------
+      await mintTo(
+        provider.connection,
+        wallet.payer,
+        stakingMint,
+        userTokenAccount,
+        wallet.publicKey,
+        1_000_000_000 // 1000 tokens
+      );
+    });
+
+    it("succeeds when user has enough tokens", async () => {
+      await program.methods
+        .depositSol(new anchor.BN(100_000_000)) // 100 tokens
+        .accounts({
+           owner: wallet.publicKey,
+            userTokenAccount,
+            stakingMint,
+        })
+        .rpc();
+
+      const stakeAccount = await program.account.stakeAccount.fetch(stakeAccountPda);
+      expect(stakeAccount.stakedAmount.toNumber()).to.equal(100_000_000);
+    });
+
+    it("fails if amount = 0", async () => {
+      try {
+        await program.methods
+          .depositSol(new anchor.BN(0))
+          .accounts({
+             owner: wallet.publicKey,
+            userTokenAccount,
+            stakingMint,
+          })
+          .rpc();
+        expect.fail("Should have thrown InvalidAmount error");
+      } catch (err: any) {
+        expect(err.error.errorCode.code).to.equal("InvalidAmount");
+      }
+    });
+
+    it("fails if user doesn’t have enough balance", async () => {
+      try {
+        await program.methods
+          .depositSol(new anchor.BN(10_000_000_000)) // too much
+          .accounts({
+            owner: wallet.publicKey,
+            userTokenAccount,
+            stakingMint,
+          })
+          .rpc();
+        expect.fail("Should have failed with insufficient funds");
+      } catch (err: any) {
+        expect(err.logs.join()).to.include("insufficient funds");
+      }
+    });
+
+    it("updates staked_amount and recent_update_time", async () => {
+      await program.methods
+        .depositSol(new anchor.BN(50_000_000))
+        .accounts({
+           owner: wallet.publicKey,
+            userTokenAccount,
+            stakingMint,
+        })
+        .rpc();
+
+      const stakeAccount = await program.account.stakeAccount.fetch(stakeAccountPda);
+      expect(stakeAccount.stakedAmount.toNumber()).to.be.greaterThan(0);
+      expect(stakeAccount.recentUpdateTime.toNumber()).to.be.greaterThan(0);
+    });
+
+    it("multiple stakes add up correctly", async () => {
+      const before = await program.account.stakeAccount.fetch(stakeAccountPda);
+      const beforeAmount = before.stakedAmount.toNumber();
+
+      await program.methods
+        .depositSol(new anchor.BN(25_000_000))
+        .accounts({
+
+         owner: wallet.publicKey,
+            userTokenAccount,
+            stakingMint,
+        })
+        .rpc();
+
+      const after = await program.account.stakeAccount.fetch(stakeAccountPda);
+      expect(after.stakedAmount.toNumber()).to.equal(beforeAmount + 25_000_000);
+    });
+  });  // -------------------------------
+  // Reward accrual
+  // -------------------------------
   describe("reward accrual", () => {
-    it("rewards increase over time", async () => {});
-    it("no rewards if no tokens staked", async () => {});
-    it("accumulates across multiple staking periods", async () => {});
-    it("handles edge cases (big amounts, long time)", async () => {});
+    it("rewards increase over time", async () => {
+      await program.methods
+        .depositSol(new anchor.BN(100_000_000))
+        .accounts({
+          owner: wallet.publicKey,
+          stakingMint,
+ 
+        })
+        .rpc();
+
+      const acc1 = await program.account.stakeAccount.fetch(stakeAccountPda);
+      const beforePoints = acc1.claimPoints.toNumber();
+
+      // Wait for some time
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      // Trigger update via a small unstake
+      await program.methods
+        .unstakeSol(new anchor.BN(1))
+        .accounts({
+          owner: wallet.publicKey,
+          userTokenAccount,
+ 
+        })
+        .rpc();
+
+      const acc2 = await program.account.stakeAccount.fetch(stakeAccountPda);
+      expect(acc2.claimPoints.toNumber()).to.be.greaterThan(beforePoints);
+    });
+
+    it("no rewards if no tokens staked", async () => {
+      const fakeUser = anchor.web3.Keypair.generate();
+      const [fakeStake] = PublicKey.findProgramAddressSync(
+        [Buffer.from("stake"), fakeUser.publicKey.toBuffer()],
+        program.programId
+      );
+
+      await program.methods
+        .initialize()
+        .accounts({
+          signer: fakeUser.publicKey,
+          stakingMint,
+        })
+        .signers([fakeUser])
+        .rpc();
+
+      const acc = await program.account.stakeAccount.fetch(fakeStake);
+      expect(acc.claimPoints.toNumber()).to.equal(0);
+    });
+
+    it("accumulates across multiple staking periods", async () => {
+      await program.methods
+        .depositSol(new anchor.BN(50_000_000))
+        .accounts({
+          owner: wallet.publicKey,
+          stakingMint,
+ 
+        })
+        .rpc();
+
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      await program.methods
+        .unstakeSol(new anchor.BN(1))
+        .accounts({
+           owner: wallet.publicKey,
+          userTokenAccount,
+ 
+        })
+        .rpc();
+
+      const acc = await program.account.stakeAccount.fetch(stakeAccountPda);
+      expect(acc.claimPoints.toNumber()).to.be.greaterThan(0);
+    });
   });
 
-  // -----------------------
-  // 4. Unstake
-  // -----------------------
+  // -------------------------------
+  // Unstake flow
+  // -------------------------------
   describe("unstake the token", () => {
-    it("succeeds when user has enough staked", async () => {});
-    it("fails if unstaking more than staked amount", async () => {});
-    it("updates staked_amount correctly", async () => {});
-    it("rewards updated before unstake (no lost points)", async () => {});
+    it("succeeds when user has enough staked", async () => {
+      await program.methods
+        .unstakeSol(new anchor.BN(10_000_000))
+        .accounts({
+          owner: wallet.publicKey,
+          userTokenAccount,
+        })
+        .rpc();
+
+      const acc = await program.account.stakeAccount.fetch(stakeAccountPda);
+      expect(acc.stakedAmount.toNumber()).to.be.lessThan(100_000_000);
+    });
+
+    it("fails if unstaking more than staked amount", async () => {
+      try {
+        await program.methods
+          .unstakeSol(new anchor.BN(10_000_000_000))
+          .accounts({
+             owner: wallet.publicKey,
+          userTokenAccount,
+ 
+          })
+          .rpc();
+        expect.fail("Should have failed with InsufficientStake");
+      } catch (err: any) {
+        expect(err.error.errorCode.code).to.equal("InsufficientStake");
+      }
+    });
+
+    it("updates staked_amount correctly", async () => {
+      const before = await program.account.stakeAccount.fetch(stakeAccountPda);
+      const beforeAmount = before.stakedAmount.toNumber();
+
+      await program.methods
+        .unstakeSol(new anchor.BN(5_000_000))
+        .accounts({
+          owner: wallet.publicKey,
+          userTokenAccount,
+ 
+        })
+        .rpc();
+
+      const after = await program.account.stakeAccount.fetch(stakeAccountPda);
+      expect(after.stakedAmount.toNumber()).to.equal(
+        beforeAmount - 5_000_000
+      );
+    });
+
+    it("rewards updated before unstake (no lost points)", async () => {
+      const before = await program.account.stakeAccount.fetch(stakeAccountPda);
+      const pointsBefore = before.claimPoints.toNumber();
+
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      await program.methods
+        .unstakeSol(new anchor.BN(1))
+        .accounts({
+          owner: wallet.publicKey,
+          userTokenAccount,
+ 
+        })
+        .rpc();
+
+      const after = await program.account.stakeAccount.fetch(stakeAccountPda);
+      expect(after.claimPoints.toNumber()).to.be.greaterThanOrEqual(
+        pointsBefore
+      );
+    });
   });
+});
 
   // -----------------------
   // 5. Claim Rewards
@@ -135,3 +429,4 @@ describe("anchor_project", () => {
     it("unauthorized user cannot manipulate another’s stake", async () => {});
   });
 });
+

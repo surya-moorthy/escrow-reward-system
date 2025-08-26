@@ -11,6 +11,15 @@ const LAMPORTS_PER_SOL: u64 = 1_000_000_000;
 #[constant]
 const SECONDS_PER_DAY: u64 = 86_400;
 
+pub fn pool_seeds<'a>(pool: &'a Account<'a, Pool>) -> [&'a [u8]; 2] {
+    [b"pool", pool.staking_mint.as_ref()]
+}
+
+
+pub fn treasury_seeds<'a>(pool_key: &Pubkey) -> [&[u8]; 2] {
+[b"treasury", pool_key.as_ref()]
+}
+
 pub fn update_points(pda_account: &mut StakeAccount, current_time: i64) -> Result<()> {
     let time_elapsed = current_time.checked_sub(pda_account.recent_update_time)
         .ok_or(StakeError::InvalidTimestamp)? as u64;

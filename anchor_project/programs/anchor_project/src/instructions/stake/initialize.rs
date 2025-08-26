@@ -6,14 +6,13 @@ use crate::state::stake::StakeAccount;
 pub fn init_handler(ctx: Context<InitializeState>) -> Result<()> {
     let clock = Clock::get()?;
 
-    // Initialize the bookkeeping PDA
     let stake_account = &mut ctx.accounts.stake_account;
     stake_account.owner = ctx.accounts.signer.key();
     stake_account.staked_amount = 0;
     stake_account.claim_points = 0;
     stake_account.recent_update_time = clock.unix_timestamp;
     stake_account.bump = ctx.bumps.stake_account;
-    stake_account.vault_bump = ctx.bumps.vault_token_account; // store vault bump
+    stake_account.vault_bump = ctx.bumps.vault_authority; // ✅ use correct bump
 
     Ok(())
 }
@@ -38,15 +37,15 @@ pub struct InitializeState<'info> {
         init,
         payer = signer,
         token::mint = staking_mint,
-        token::authority = vault_authority, // program-controlled PDA
+        token::authority = vault_authority,
         seeds = [b"vault", signer.key().as_ref()],
         bump
     )]
     pub vault_token_account: Account<'info, TokenAccount>,
 
-    /// CHECK: the PDA authority for the vault
+    /// CHECK: PDA authority for the vault
     #[account(
-        seeds = [b"vault_auth"],
+        seeds = [b"vault_auth", signer.key().as_ref()],   // ✅ tie to signer
         bump
     )]
     pub vault_authority: UncheckedAccount<'info>,

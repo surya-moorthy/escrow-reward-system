@@ -1,8 +1,5 @@
 use anchor_lang::prelude::*;
-
 use crate::{error::StakeError, state::stake::StakeAccount, update_points};
-
-
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
 pub fn stake(ctx: Context<Stake>, amount: u64) -> Result<()> {
@@ -30,6 +27,7 @@ pub fn stake(ctx: Context<Stake>, amount: u64) -> Result<()> {
         .staked_amount
         .checked_add(amount)
         .ok_or(StakeError::Overflow)?;
+    pda_account.recent_update_time = clock.unix_timestamp;
 
     msg!(
         "Staked {} tokens. Total staked: {}, Total points: {}",
@@ -45,7 +43,7 @@ pub fn stake(ctx: Context<Stake>, amount: u64) -> Result<()> {
 pub struct Stake<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
-    // User’s associated token account (where their staking tokens are)
+
     #[account(
         mut,
         constraint = user_token_account.owner == owner.key(),
@@ -53,7 +51,6 @@ pub struct Stake<'info> {
     )]
     pub user_token_account: Account<'info, TokenAccount>,
 
-    // Vault PDA that holds staked tokens (escrow)
     #[account(
         mut,
         seeds = [b"vault", owner.key().as_ref()],
@@ -61,7 +58,6 @@ pub struct Stake<'info> {
     )]
     pub vault_token_account: Account<'info, TokenAccount>,
 
-    // The stake bookkeeping PDA
     #[account(
         mut,
         seeds = [b"stake", owner.key().as_ref()],
@@ -69,11 +65,7 @@ pub struct Stake<'info> {
     )]
     pub stake_account: Account<'info, StakeAccount>,
 
-    // Mint of the staking token
     pub staking_mint: Account<'info, Mint>,
-
-    // Token program
     pub token_program: Program<'info, Token>,
-
     pub system_program: Program<'info, System>,
 }
