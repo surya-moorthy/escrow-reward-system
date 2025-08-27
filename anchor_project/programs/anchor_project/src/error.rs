@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 
 
 #[error_code]
-pub enum StakeError {
+pub enum CustomError {
     #[msg("Amount must be greater than 0")]
     InvalidAmount,
     #[msg("Insufficient staked amount")]

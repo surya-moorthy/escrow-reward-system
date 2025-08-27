@@ -1,57 +1,55 @@
 use anchor_lang::prelude::*;
-use anchor_spl::{associated_token::AssociatedToken, token::{Mint, Token, TokenAccount}};
+use anchor_spl::token::{Mint, Token};
 
-use crate::state::stake::StakeAccount;
+use crate::pool::PoolAccount;
 
-pub fn init_handler(ctx: Context<InitializeState>) -> Result<()> {
-    let clock = Clock::get()?;
+pub fn init_handler( ctx: Context<InitializePool>,
+        reward_rate: u64,
+    ) -> Result<()> {
+        let pool = &mut ctx.accounts.pool;
 
-    let stake_account = &mut ctx.accounts.stake_account;
-    stake_account.owner = ctx.accounts.signer.key();
-    stake_account.staked_amount = 0;
-    stake_account.claim_points = 0;
-    stake_account.recent_update_time = clock.unix_timestamp;
-    stake_account.bump = ctx.bumps.stake_account;
-    stake_account.vault_bump = ctx.bumps.vault_authority; // ✅ use correct bump
+        pool.staking_mint = ctx.accounts.staking_mint.key();
+        pool.reward_mint = ctx.accounts.reward_mint.key();
+        pool.reward_rate = reward_rate;
+        pool.total_staked = 0;
+        pool.last_update_time = Clock::get()?.unix_timestamp as u64;
 
-    Ok(())
-}
+        Ok(())
+    }
+
 
 #[derive(Accounts)]
-pub struct InitializeState<'info> {
+pub struct InitializePool<'info> {
+    /// Admin who pays for initialization and controls the pool
     #[account(mut)]
-    pub signer: Signer<'info>,
+    pub admin: Signer<'info>, // ✅ better than raw AccountInfo
 
-    // The bookkeeping PDA
+    /// Pool account (PDA)
     #[account(
         init,
-        payer = signer,
-        space = 8 + StakeAccount::INIT_SPACE,
-        seeds = [b"stake", signer.key().as_ref()],
+        payer = admin,
+        space = PoolAccount::LEN,
+        seeds = [b"pool"],
         bump
     )]
-    pub stake_account: Account<'info, StakeAccount>,
+    pub pool: Account<'info, PoolAccount>,
 
-    // Token vault to hold user staked SPL tokens (PDA)
-    #[account(
-        init_if_needed,
-        payer = signer,
-        associated_token::mint = staking_mint,
-        associated_token::authority = vault_authority
-    )]
-    pub vault_token_account: Account<'info, TokenAccount>,
-
-
-    /// CHECK: PDA authority for the vault
-    #[account(
-        seeds = [b"vault_auth", signer.key().as_ref()],   // ✅ tie to signer
-        bump
-    )]
-    pub vault_authority: UncheckedAccount<'info>,
-
+    /// Token that will be staked
     pub staking_mint: Account<'info, Mint>,
+
+    /// Token used for rewards
+    pub reward_mint: Account<'info, Mint>,
+
+    /// System program for creating accounts
     pub system_program: Program<'info, System>,
+
+    /// Token program for token operations
     pub token_program: Program<'info, Token>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
+
+    /// Rent sysvar
     pub rent: Sysvar<'info, Rent>,
 }
+
+
+
+
