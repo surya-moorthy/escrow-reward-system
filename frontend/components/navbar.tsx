@@ -1,0 +1,120 @@
+"use client"
+
+import { useState } from "react"
+import { Button } from "@/components/ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Badge } from "@/components/ui/badge"
+import { Wallet, ChevronDown, Copy, LogOut } from "lucide-react"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
+
+export function Navbar() {
+  const [isConnected, setIsConnected] = useState(false)
+  const [walletAddress, setWalletAddress] = useState("")
+  const pathname = usePathname()
+
+  const connectWallet = async () => {
+    // Simulate wallet connection
+    setIsConnected(true)
+    setWalletAddress("7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU")
+  }
+
+  const disconnectWallet = () => {
+    setIsConnected(false)
+    setWalletAddress("")
+  }
+
+  const copyAddress = () => {
+    navigator.clipboard.writeText(walletAddress)
+  }
+
+  const truncateAddress = (address: string) => {
+    return `${address.slice(0, 4)}...${address.slice(-4)}`
+  }
+
+  return (
+    <nav className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex h-16 items-center justify-between">
+          {/* Logo and Title */}
+          <Link href="/" className="flex items-center space-x-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+              <span className="text-sm font-bold text-primary-foreground">S</span>
+            </div>
+            <h1 className="text-xl font-bold text-foreground">SolStake</h1>
+          </Link>
+
+          {/* Navigation Links */}
+          <div className="hidden md:flex items-center space-x-8">
+            <Link
+              href="/"
+              className={`transition-colors ${
+                pathname === "/" ? "text-primary" : "text-muted-foreground hover:text-primary"
+              }`}
+            >
+              Home
+            </Link>
+            <Link
+              href="/tokens"
+              className={`transition-colors ${
+                pathname === "/tokens" ? "text-primary" : "text-muted-foreground hover:text-primary"
+              }`}
+            >
+              Tokens
+            </Link>
+            <Link
+              href="/portfolio"
+              className={`transition-colors ${
+                pathname === "/portfolio" ? "text-primary" : "text-muted-foreground hover:text-primary"
+              }`}
+            >
+              Portfolio
+            </Link>
+            <Link
+              href="/escrow"
+              className={`transition-colors ${
+                pathname === "/escrow" ? "text-primary" : "text-muted-foreground hover:text-primary"
+              }`}
+            >
+              Escrow
+            </Link>
+          </div>
+
+          {/* Wallet Connection */}
+          <div className="flex items-center space-x-4">
+            {/* Connection Status */}
+            <Badge variant={isConnected ? "default" : "secondary"}>{isConnected ? "Connected" : "Not Connected"}</Badge>
+
+            {/* Wallet Button/Dropdown */}
+            {!isConnected ? (
+              <Button onClick={connectWallet} className="flex items-center space-x-2">
+                <Wallet className="h-4 w-4" />
+                <span>Connect Wallet</span>
+              </Button>
+            ) : (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="flex items-center space-x-2 bg-transparent">
+                    <Wallet className="h-4 w-4" />
+                    <span>{truncateAddress(walletAddress)}</span>
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem onClick={copyAddress} className="flex items-center space-x-2">
+                    <Copy className="h-4 w-4" />
+                    <span>Copy Address</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={disconnectWallet} className="flex items-center space-x-2 text-destructive">
+                    <LogOut className="h-4 w-4" />
+                    <span>Disconnect</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
+        </div>
+      </div>
+    </nav>
+  )
+}

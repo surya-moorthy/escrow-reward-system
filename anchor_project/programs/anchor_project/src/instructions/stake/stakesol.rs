@@ -52,9 +52,7 @@ pub struct Stake<'info> {
     pub user_token_account: Account<'info, TokenAccount>,
 
     #[account(
-        mut,
-        seeds = [b"vault", owner.key().as_ref()],
-        bump
+        mut
     )]
     pub vault_token_account: Account<'info, TokenAccount>,
 

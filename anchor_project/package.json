@@ -5,6 +5,9 @@
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"
   },
   "dependencies": {
+    "@codama/nodes-from-anchor": "^1.2.5",
+    "@codama/renderers-js": "^1.3.4",
+    "@codama/renderers-rust": "^1.2.2",
     "@coral-xyz/anchor": "^0.31.1",
     "@solana/spl-token": "^0.4.13"
   },

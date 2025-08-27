@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{Token, TokenAccount, Mint};
+use anchor_spl::{associated_token::AssociatedToken, token::{Mint, Token, TokenAccount}};
 
 use crate::state::stake::StakeAccount;
 
@@ -34,14 +34,13 @@ pub struct InitializeState<'info> {
 
     // Token vault to hold user staked SPL tokens (PDA)
     #[account(
-        init,
+        init_if_needed,
         payer = signer,
-        token::mint = staking_mint,
-        token::authority = vault_authority,
-        seeds = [b"vault", signer.key().as_ref()],
-        bump
+        associated_token::mint = staking_mint,
+        associated_token::authority = vault_authority
     )]
     pub vault_token_account: Account<'info, TokenAccount>,
+
 
     /// CHECK: PDA authority for the vault
     #[account(
@@ -53,5 +52,6 @@ pub struct InitializeState<'info> {
     pub staking_mint: Account<'info, Mint>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
     pub rent: Sysvar<'info, Rent>,
 }

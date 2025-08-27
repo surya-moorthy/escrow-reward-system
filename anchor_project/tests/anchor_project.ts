@@ -2,7 +2,7 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { assert, expect } from "chai";
 import { PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID, createAccount, createInitializeAccountInstruction, createMint, getAssociatedTokenAddress, getOrCreateAssociatedTokenAccount, mintTo } from "@solana/spl-token";
+import { TOKEN_PROGRAM_ID, createAccount, createInitializeAccountInstruction, createMint, getAssociatedTokenAddress, getAssociatedTokenAddressSync, getOrCreateAssociatedTokenAccount, mintTo } from "@solana/spl-token";
 import { AnchorProject } from "../target/types/anchor_project"; // update name
 
 describe("staking program", () => {
@@ -19,22 +19,16 @@ describe("staking program", () => {
   let vaultTokenAccount:anchor.web3.PublicKey;
   let poolPda, treasuryPda,bump,poolBump,treasuryBump,vaultBump,vaultTokenBump;
   let vaultAuthority : anchor.web3.PublicKey;
+  let vaultTokenAta : anchor.web3.PublicKey;
+  let rewardMint : anchor.web3.PublicKey;
+  let userRewardTokenAccount : anchor.web3.PublicKey;
+  let treasuryTokenAccount : anchor.web3.PublicKey;
 
   const admin = anchor.web3.Keypair.generate();
 
     before(async () => {
   // 1️⃣ Derive pool PDA
-  [poolPda, poolBump] = await PublicKey.findProgramAddress(
-    [Buffer.from("pool"), stakingMint?.toBuffer() || Buffer.alloc(32)], // placeholder for stakingMint if not yet created
-    program.programId
-  );
-
-  // 2️⃣ Derive treasury PDA
-  [treasuryPda, treasuryBump] = await PublicKey.findProgramAddress(
-    [Buffer.from("treasury"), poolPda.toBuffer()],
-    program.programId
-  );
-
+ 
   // 3️⃣ Create staking mints
   stakingMint = await createMint(
     provider.connection,
@@ -52,35 +46,33 @@ describe("staking program", () => {
     9
   );
 
-  // Re-derive pool PDA now that stakingMint exists (matches Rust seeds)
-  [poolPda, poolBump] = await PublicKey.findProgramAddress(
-    [Buffer.from("pool"), stakingMint.toBuffer()],
-    program.programId
-  );
-[vaultAuthority, vaultBump] = await PublicKey.findProgramAddress(
-  [Buffer.from("vault_auth"), wallet.publicKey.toBuffer()],
-  program.programId
-);
+   
 
-[vaultTokenPda, vaultTokenBump] = await PublicKey.findProgramAddress(
-  [Buffer.from("vault"), wallet.publicKey.toBuffer()],
-  program.programId
-);
-  // 7️⃣ Airdrop SOL to admin for fees
+  [vaultAuthority, vaultBump] = await PublicKey.findProgramAddress(
+      [Buffer.from("vault_auth"), wallet.publicKey.toBuffer()],
+      program.programId
+    );
+
+
+   // 7️⃣ Airdrop SOL to admin for fees
   await provider.connection.confirmTransaction(
     await provider.connection.requestAirdrop(admin.publicKey, 1e9),
     "confirmed"
   );
+
+    vaultTokenAta = (
+      await getAssociatedTokenAddress(
+          stakingMint,
+          vaultAuthority,  // can be a PDA (just pass allowOwnerOffCurve = true)
+          true             // allowOwnerOffCurve = true since vaultAuthority is PDA
+        )
+    )
 });
 
   // -----------------------
   // 1. Initialize
   // -----------------------
   describe("initialize", () => {
-    before(async () => {
-      // Create staking token mint
-     
-    });
 
     it("works with valid user", async () => {
       [stakeAccountPda] = anchor.web3.PublicKey.findProgramAddressSync(
@@ -93,7 +85,7 @@ describe("staking program", () => {
         .accounts({
           signer: wallet.publicKey,
           stakingMint,
-
+          
         })
         .rpc();
 
@@ -154,26 +146,41 @@ describe("staking program", () => {
     });
   });
 
-
 describe("initialize_pool", () => {
+
+
+  before(async()=> {
+     // ---------------------------
+   rewardMint = await createMint(
+    provider.connection,
+    admin,            // fee payer
+    admin.publicKey,        // mint authority
+    null,                   // freeze authority
+    9                       // decimals
+  );
+  console.log(rewardMint);
+  })
+
   it("initializes the pool correctly", async () => {
     const rewardRate = new anchor.BN(10); // example reward rate
     const lockDuration = new anchor.BN(60 * 60 * 24); // 1 day in seconds
 
-    // Call initializePool using PDAs already derived in the main before hook
     await program.methods
       .initializePool(rewardRate, lockDuration)
       .accounts({
-        // admin: admin.publicKey,
-        // pool: poolPda,
-        // treasury: treasuryPda,
-        // stakingMint,
-        // systemProgram: anchor.web3.SystemProgram.programId,
         admin: admin.publicKey,
-        stakingMint
+        // pool: poolPda,                // required
+        // treasury: treasuryPda,        // required
+        stakingMint,
+        rewardMint
+        // systemProgram: anchor.web3.SystemProgram.programId,
       })
       .signers([admin])
       .rpc();
+
+    // Optional: fetch and assert pool state
+    const poolAccount = await program.account.pool.fetch(poolPda);
+    expect(poolAccount.rewardRate.toNumber()).to.equal(10);
   });
 });
 
@@ -210,6 +217,7 @@ describe("initialize_pool", () => {
            owner: wallet.publicKey,
             userTokenAccount,
             stakingMint,
+            vaultTokenAccount: vaultTokenAta
         })
         .rpc();
 
@@ -225,6 +233,7 @@ describe("initialize_pool", () => {
              owner: wallet.publicKey,
             userTokenAccount,
             stakingMint,
+            vaultTokenAccount: vaultTokenAta
           })
           .rpc();
         expect.fail("Should have thrown InvalidAmount error");
@@ -241,6 +250,7 @@ describe("initialize_pool", () => {
             owner: wallet.publicKey,
             userTokenAccount,
             stakingMint,
+                        vaultTokenAccount: vaultTokenAta
           })
           .rpc();
         expect.fail("Should have failed with insufficient funds");
@@ -256,6 +266,7 @@ describe("initialize_pool", () => {
            owner: wallet.publicKey,
             userTokenAccount,
             stakingMint,
+                        vaultTokenAccount: vaultTokenAta
         })
         .rpc();
 
@@ -275,6 +286,7 @@ describe("initialize_pool", () => {
          owner: wallet.publicKey,
             userTokenAccount,
             stakingMint,
+                        vaultTokenAccount: vaultTokenAta
         })
         .rpc();
 
@@ -289,10 +301,56 @@ describe("initialize_pool", () => {
 describe("reward accrual", () => {
 
  before(async ()=> {
-      const [stakeAccountPda, stakeBump] = await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from("stake"), wallet.publicKey.toBuffer()],
+    
+    
+    [vaultAuthority, vaultBump] = await PublicKey.findProgramAddress(
+      [Buffer.from("vault_auth"), wallet.publicKey.toBuffer()],
       program.programId
     );
+
+     // ---------------------------
+  // 2. Derive pool PDA
+  // ---------------------------
+  const [poolPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("pool"), stakingMint.toBuffer()],
+    program.programId
+  );
+
+  // ---------------------------
+  // 3. Derive treasury token account PDA
+  // ---------------------------
+   [treasuryTokenAccount] = PublicKey.findProgramAddressSync(
+    [Buffer.from("treasury"), poolPda.toBuffer()],
+    program.programId
+  );
+
+  // ---------------------------
+  // 4. Derive user reward ATA
+  // ---------------------------
+   userRewardTokenAccount = getAssociatedTokenAddressSync(
+    rewardMint,
+    admin.publicKey,
+    false,                   // allow owner off curve = false
+    TOKEN_PROGRAM_ID
+  );  
+
+
+    [vaultTokenPda, vaultTokenBump] = await PublicKey.findProgramAddress(
+      [Buffer.from("vault"), poolPda.toBuffer()],
+      program.programId
+    );
+
+
+    userTokenAccount = (
+        await getOrCreateAssociatedTokenAccount(
+          provider.connection,
+          wallet.payer,
+          stakingMint,
+          wallet.publicKey
+        )
+      ).address;
+
+
  })
 
   it("rewards increase over time", async () => {
@@ -303,6 +361,8 @@ describe("reward accrual", () => {
           owner: wallet.publicKey,
           stakingMint,
           userTokenAccount,
+          vaultTokenAccount: vaultTokenAta
+
         })
         .rpc();
 
@@ -316,17 +376,15 @@ describe("reward accrual", () => {
       await program.methods
         .unstakeSol(new anchor.BN(1))
         .accounts({
-          owner: wallet.publicKey,
-          // userTokenAccount,
-          // vaultTokenAccount : vaultTokenPda,
-          // vaultAuthority, 
-          // treasuryPda,
-          // pool: poolPda
-          pool : poolPda,
-          treasuryPda,
-          userTokenAccount,
-          vaultAuthority,
-          vaultTokenAccount : vaultTokenPda
+         owner : wallet.publicKey,
+         pool  : poolPda,
+         rewardMint,
+         treasuryTokenAccount,
+         userRewardTokenAccount,
+         userTokenAccount,
+         vaultAuthority,
+         vaultTokenAccount: vaultTokenAta,
+
         })
         .rpc();
 
@@ -355,6 +413,7 @@ describe("reward accrual", () => {
         .accounts({
           signer: fakeUser.publicKey,
           stakingMint,
+
         })
         .signers([fakeUser])
         .rpc();
@@ -375,6 +434,7 @@ describe("reward accrual", () => {
           owner: wallet.publicKey,
           stakingMint,
           userTokenAccount,
+                      vaultTokenAccount: vaultTokenAta
         })
         .rpc();
 
@@ -383,12 +443,16 @@ describe("reward accrual", () => {
       await program.methods
         .unstakeSol(new anchor.BN(1))
         .accounts({
-          owner: wallet.publicKey,
-          userTokenAccount,
-          vaultTokenAccount : vaultTokenPda,
-          vaultAuthority, // ⚠️ include if required
-          treasuryPda,
-          pool: poolPda
+        owner : wallet.publicKey,
+         pool  : poolPda,
+         rewardMint,
+         treasuryTokenAccount,
+         userRewardTokenAccount,
+         userTokenAccount,
+         vaultAuthority,
+         vaultTokenAccount: vaultTokenAta,
+
+
         })
         .rpc();
 
@@ -410,22 +474,36 @@ describe("reward accrual", () => {
 
 
       before(async () => {
-        // derive pool PDA
-    [poolPda, poolBump] = await anchor.web3.PublicKey.findProgramAddress(
+          // Re-derive pool PDA now that stakingMint exists (matches Rust seeds)
+    [poolPda] = PublicKey.findProgramAddressSync(
       [Buffer.from("pool"), stakingMint.toBuffer()],
       program.programId
     );
 
-    // derive treasury PDA
-    [treasuryPda, treasuryBump] = await anchor.web3.PublicKey.findProgramAddress(
+    [treasuryPda,treasuryBump] = await PublicKey.findProgramAddress(
       [Buffer.from("treasury"), poolPda.toBuffer()],
       program.programId
     );
 
-  [vaultTokenPda, vaultTokenBump] = await PublicKey.findProgramAddress(
-    [Buffer.from("vault"), wallet.publicKey.toBuffer()],
-  program.programId
-);
+      [vaultAuthority, vaultBump] = await PublicKey.findProgramAddress(
+        [Buffer.from("vault_auth"), wallet.publicKey.toBuffer()],
+        program.programId
+      );
+
+      [vaultTokenPda, vaultTokenBump] = await PublicKey.findProgramAddress(
+        [Buffer.from("vault"), poolPda.toBuffer()],
+        program.programId
+      );
+
+      userTokenAccount = (
+        await getOrCreateAssociatedTokenAccount(
+          provider.connection,
+          wallet.payer,
+          stakingMint,
+          wallet.publicKey
+        )
+      ).address;
+
 
   })
 
@@ -433,12 +511,15 @@ describe("reward accrual", () => {
       await program.methods
         .unstakeSol(new anchor.BN(10_000_000))
         .accounts({
-          owner: wallet.publicKey,
-          userTokenAccount,
-          vaultTokenAccount : vaultTokenPda,
-          vaultAuthority,
-          treasuryPda,
-          pool: poolPda
+            owner : wallet.publicKey,
+         pool  : poolPda,
+         rewardMint,
+         treasuryTokenAccount,
+         userRewardTokenAccount,
+         userTokenAccount,
+         vaultAuthority,
+         vaultTokenAccount: vaultTokenAta,
+
         })
         .rpc();
 
@@ -451,12 +532,14 @@ describe("reward accrual", () => {
         await program.methods
           .unstakeSol(new anchor.BN(10_000_000_000))
           .accounts({
-             owner: wallet.publicKey,
-          userTokenAccount,
-           vaultTokenAccount : vaultTokenPda,
-          vaultAuthority,
-          treasuryPda,
-          pool: poolPda
+              owner : wallet.publicKey,
+         pool  : poolPda,
+         rewardMint,
+         treasuryTokenAccount,
+         userRewardTokenAccount,
+         userTokenAccount,
+         vaultAuthority,
+         vaultTokenAccount
           })
           .rpc();
         expect.fail("Should have failed with InsufficientStake");
@@ -473,12 +556,15 @@ describe("reward accrual", () => {
       await program.methods
         .unstakeSol(new anchor.BN(5_000_000))
         .accounts({
-          owner: wallet.publicKey,
-          userTokenAccount,
-           vaultTokenAccount : vaultTokenPda,
-          vaultAuthority,
-          treasuryPda,
-              pool: poolPda
+         owner : wallet.publicKey,
+         pool : poolPda,
+         rewardMint,
+         treasuryTokenAccount,
+         userRewardTokenAccount,
+         userTokenAccount,
+         vaultAuthority,
+         vaultTokenAccount: vaultTokenAta,
+
         })
         .rpc();
 
@@ -497,13 +583,16 @@ describe("reward accrual", () => {
       await program.methods
         .unstakeSol(new anchor.BN(1))
         .accounts({
-          owner: wallet.publicKey,
-          userTokenAccount,
-          vaultTokenAccount : vaultTokenPda,
-          vaultAuthority,
-          treasuryPda,
-          pool: poolPda
-        })
+              owner : wallet.publicKey,
+         pool : poolPda,
+         rewardMint,
+         treasuryTokenAccount,
+         userRewardTokenAccount,
+         userTokenAccount,
+         vaultAuthority,
+         vaultTokenAccount: vaultTokenAta,
+
+        }) 
         .rpc();
 
       const after = await program.account.stakeAccount.fetch(stakeAccountPda);

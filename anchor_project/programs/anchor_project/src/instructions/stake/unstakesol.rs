@@ -1,6 +1,6 @@
-use anchor_lang::{prelude::*, system_program};
+use anchor_lang::prelude::*;
 use crate::{calculate_reward, pool::Pool, state::stake::StakeAccount, update_points};
-use anchor_spl::token::{self, Token, TokenAccount, Transfer};
+use anchor_spl::token::{self, Token, TokenAccount, Transfer, Mint};
 use crate::error::StakeError;
 
 pub fn unstake(ctx: Context<Unstake>, amount: u64) -> Result<()> {
@@ -19,9 +19,8 @@ pub fn unstake(ctx: Context<Unstake>, amount: u64) -> Result<()> {
     update_points(stake, clock.unix_timestamp)?;
 
     // -------------------------------
-    // 1. Transfer SPL tokens back to user
+    // 1. Transfer staked SPL tokens back to user
     // -------------------------------
-
     let owner_key = ctx.accounts.owner.key();
 
     let vault_seeds = &[
@@ -43,40 +42,49 @@ pub fn unstake(ctx: Context<Unstake>, amount: u64) -> Result<()> {
     token::transfer(cpi_ctx, amount)?;
 
     // -------------------------------
-    // 2. Send SOL rewards from treasury to user
+    // 2. Send SPL reward tokens from treasury to user
     // -------------------------------
+    let reward_amount = calculate_reward(
+        amount,
+        stake,
+        clock.unix_timestamp,
+        &ctx.accounts.pool,
+    )?;
 
     let pool_key = ctx.accounts.pool.key();
-
-    let treasury_seeds = &[
-        b"treasury",
-        pool_key.as_ref(),
-        &[ctx.accounts.pool.treasury_bump],
+    let reward_key = ctx.accounts.reward_mint.key();
+    let pool_seeds = &[
+        b"pool",
+        reward_key.as_ref(),
+        &[ctx.accounts.pool.pool_bump],
     ];
-    let treasury_signer = &[&treasury_seeds[..]];
-
-    let reward_amount = calculate_reward(amount, stake, clock.unix_timestamp, &ctx.accounts.pool)?;
+    let signer_seeds = &[&pool_seeds[..]];
 
     let cpi_ctx = CpiContext::new_with_signer(
-        ctx.accounts.system_program.to_account_info(),
-        system_program::Transfer {
-            from: ctx.accounts.treasury_pda.to_account_info(),
-            to: ctx.accounts.owner.to_account_info(),
+        ctx.accounts.token_program.to_account_info(),
+        Transfer {
+            from: ctx.accounts.treasury_token_account.to_account_info(),
+            to: ctx.accounts.user_reward_token_account.to_account_info(),
+            authority: ctx.accounts.pool.to_account_info(),
         },
-        treasury_signer,
+        signer_seeds,
     );
-    system_program::transfer(cpi_ctx, reward_amount)?;
+    token::transfer(cpi_ctx, reward_amount)?;
 
     // -------------------------------
     // 3. Update stake account state
     // -------------------------------
-
     stake.staked_amount = stake
         .staked_amount
         .checked_sub(amount)
         .ok_or(StakeError::Underflow)?;
 
-    msg!("Unstaked {} tokens. Remaining staked: {}, Rewards paid: {} lamports", amount, stake.staked_amount, reward_amount);
+    msg!(
+        "Unstaked {} tokens. Remaining staked: {}, Rewards paid: {} reward tokens",
+        amount,
+        stake.staked_amount,
+        reward_amount
+    );
 
     Ok(())
 }
@@ -86,7 +94,6 @@ pub struct Unstake<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
 
-    // The bookkeeping PDA
     #[account(
         mut,
         seeds = [b"stake", owner.key().as_ref()],
@@ -94,7 +101,7 @@ pub struct Unstake<'info> {
     )]
     pub stake_account: Account<'info, StakeAccount>,
 
-    // User's SPL token account (where tokens return)
+    // User’s SPL token account (where staked tokens are returned)
     #[account(mut)]
     pub user_token_account: Account<'info, TokenAccount>,
 
@@ -105,12 +112,22 @@ pub struct Unstake<'info> {
     /// CHECK: vault authority PDA
     pub vault_authority: UncheckedAccount<'info>,
 
-    // Treasury PDA (SOL rewards vault)
+    // User’s reward token account (receives rewards)
     #[account(mut)]
-    pub treasury_pda: SystemAccount<'info>,
+    pub user_reward_token_account: Account<'info, TokenAccount>,
 
-    // Pool PDA (stores reward rate, lock duration, treasury bump)
-    #[account()]
+    // Treasury SPL token account (PDA) holding reward tokens
+    #[account(
+        mut,
+        token::mint = reward_mint,
+        token::authority = pool,
+    )]
+    pub treasury_token_account: Account<'info, TokenAccount>,
+
+    // Reward token mint
+    pub reward_mint: Account<'info, Mint>,
+
+    // Pool PDA (stores config and treasury bump)
     pub pool: Account<'info, Pool>,
 
     pub token_program: Program<'info, Token>,
