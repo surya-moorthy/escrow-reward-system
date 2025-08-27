@@ -1,4 +1,7 @@
 use anchor_lang::prelude::*;
+use anchor_spl::token::{self, Token, TokenAccount, Transfer};
+
+use crate::{pool::PoolAccount, state::stake::UserStakeAccount};
 
 #[derive(Accounts)]
 pub struct ClaimRewards<'info> {

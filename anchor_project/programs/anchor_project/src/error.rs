@@ -20,3 +20,9 @@ pub enum CustomError {
     #[msg("Given time is invalid")]
     InvalidTime
 }
+
+#[error_code]
+pub enum  MarketplaceError {
+        #[msg("Listing is active")]
+    ListingInactive
+}
