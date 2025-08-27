@@ -1,36 +1,39 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Badge } from "@/components/ui/badge"
-import { Wallet, ChevronDown, Copy, LogOut } from "lucide-react"
-import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Badge } from "@/components/ui/badge";
+import { Wallet, ChevronDown, Copy, LogOut } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useWallet } from "@solana/wallet-adapter-react";
 
 export function Navbar() {
-  const [isConnected, setIsConnected] = useState(false)
-  const [walletAddress, setWalletAddress] = useState("")
-  const pathname = usePathname()
+  const { connected, publicKey, connect, disconnect, select } = useWallet();
+  const pathname = usePathname();
+  const [copied, setCopied] = useState(false);
 
-  const connectWallet = async () => {
-    // Simulate wallet connection
-    setIsConnected(true)
-    setWalletAddress("7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU")
-  }
-
-  const disconnectWallet = () => {
-    setIsConnected(false)
-    setWalletAddress("")
-  }
-
-  const copyAddress = () => {
-    navigator.clipboard.writeText(walletAddress)
-  }
+  const copyAddress = async () => {
+    if (!publicKey) return;
+    await navigator.clipboard.writeText(publicKey.toBase58());
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
 
   const truncateAddress = (address: string) => {
-    return `${address.slice(0, 4)}...${address.slice(-4)}`
-  }
+    return `${address.slice(0, 4)}...${address.slice(-4)}`;
+  };
+
+  const connectPhantom = async () => {
+    await select("Phantom"); // tells adapter which wallet
+    await connect(); // then connect
+  };
 
   return (
     <nav className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -82,30 +85,44 @@ export function Navbar() {
 
           {/* Wallet Connection */}
           <div className="flex items-center space-x-4">
-            {/* Connection Status */}
-            <Badge variant={isConnected ? "default" : "secondary"}>{isConnected ? "Connected" : "Not Connected"}</Badge>
+            <Badge variant={connected ? "default" : "secondary"}>
+              {connected ? "Connected" : "Not Connected"}
+            </Badge>
 
-            {/* Wallet Button/Dropdown */}
-            {!isConnected ? (
-              <Button onClick={connectWallet} className="flex items-center space-x-2">
-                <Wallet className="h-4 w-4" />
-                <span>Connect Wallet</span>
-              </Button>
+            {!connected ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button className="flex items-center space-x-2">
+                    <Wallet className="h-4 w-4" />
+                    <span>Connect Wallet</span>
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  {/* Add more wallets here later */}
+                  <DropdownMenuItem onClick={connectPhantom}>
+                    <Wallet className="h-4 w-4 mr-2" /> Phantom
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             ) : (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="flex items-center space-x-2 bg-transparent">
                     <Wallet className="h-4 w-4" />
-                    <span>{truncateAddress(walletAddress)}</span>
+                    <span>{truncateAddress(publicKey?.toBase58() || "")}</span>
                     <ChevronDown className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuItem onClick={copyAddress} className="flex items-center space-x-2">
-                    <Copy className="h-4 w-4" />
-                    <span>Copy Address</span>
+                  <DropdownMenuItem onClick={copyAddress}>
+                    <Copy className="h-4 w-4 mr-2" />
+                    {copied ? "Copied!" : "Copy Address"}
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={disconnectWallet} className="flex items-center space-x-2 text-destructive">
+                  <DropdownMenuItem
+                    onClick={disconnect}
+                    className="flex items-center space-x-2 text-destructive"
+                  >
                     <LogOut className="h-4 w-4" />
                     <span>Disconnect</span>
                   </DropdownMenuItem>
@@ -116,5 +133,5 @@ export function Navbar() {
         </div>
       </div>
     </nav>
-  )
+  );
 }
