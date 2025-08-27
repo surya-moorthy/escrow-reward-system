@@ -23,5 +23,10 @@ pub mod anchor_project {
     pub fn stakesol(ctx: Context<Stake>, amount : u64) -> Result<()> {
         stake_event::stake_handler(ctx, amount)
     }
+
+
+    pub fn unstakesol(ctx: Context<Unstake>, amount : u64) -> Result<()> {
+        unstake::unstake(ctx, amount)
+    }
     
 }
