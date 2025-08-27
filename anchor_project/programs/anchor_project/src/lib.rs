@@ -28,5 +28,9 @@ pub mod anchor_project {
     pub fn unstakesol(ctx: Context<Unstake>, amount : u64) -> Result<()> {
         unstake::unstake(ctx, amount)
     }
+
+    pub fn claim_rewards_sol(ctx: Context<ClaimRewards>) -> Result<()> {
+          claimrewards::claim_rewards(ctx)
+}
     
 }

@@ -1,7 +1,7 @@
 import * as anchor from "@coral-xyz/anchor";
 import { PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
 import { expect } from "chai";
-import { createAccount, createMint, mintTo, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { createAccount, createAssociatedTokenAccountInstruction, createMint, getAccount, getAssociatedTokenAddress, mintTo, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { SendTransactionError } from "@solana/web3.js";
 import { BN } from "bn.js";
 import { describe } from "mocha";
@@ -20,10 +20,13 @@ describe("staking_program - initialize_pool", () => {
   let poolVaultBump: number;
   let poolVault: PublicKey;
   let poolBump: number;
+   let vaultAuthority: PublicKey;
+  let vaultAuthorityBump: number;
   let userStakePda: PublicKey;
   let user: anchor.web3.Keypair;
   let userTokenAccount: PublicKey;
   let userStakeBump: number;
+  let rewardVault: PublicKey;
 
   describe("initialize_pool", () => {
     before(async () => {
@@ -48,8 +51,15 @@ describe("staking_program - initialize_pool", () => {
         [Buffer.from("pool-fake")],
         program.programId
       );
+      
+      [vaultAuthority, vaultAuthorityBump] = await PublicKey.findProgramAddress(
+      [Buffer.from("vault_authority"), poolPda.toBuffer()], 
+      program.programId
+    );
+
     });
 
+      
     it("✅ Should create a pool successfully", async () => {
       await program.methods
         .initialize(new BN(10))
@@ -473,5 +483,139 @@ describe("staking_program - initialize_pool", () => {
         expect(err.toString()).to.include("InvalidAmount");
       }
     });
+  });  describe("claim_rewards instruction tests", () => {
+    let rewardUser: anchor.web3.Keypair;
+    let rewardUserStakePda: PublicKey;
+    let rewardUserTokenAccount: PublicKey;
+    let rewardUserRewardAccount: PublicKey;
+
+    before(async () => {
+      // Create reward vault with proper authority
+      rewardVault = await createAccount(provider.connection, admin, rewardMint, vaultAuthority);
+      await mintTo(provider.connection, admin, rewardMint, rewardVault, admin, 10_000_000);
+
+      // Create reward user
+      rewardUser = anchor.web3.Keypair.generate();
+      await provider.connection.requestAirdrop(rewardUser.publicKey, 2e9);
+
+      [rewardUserStakePda] = await PublicKey.findProgramAddress(
+        [Buffer.from("stake"), rewardUser.publicKey.toBuffer()],
+        program.programId
+      );
+
+      // Create user accounts
+      rewardUserTokenAccount = await createAccount(provider.connection, admin, stakingMint, rewardUser.publicKey);
+      rewardUserRewardAccount = await createAccount(provider.connection, admin, rewardMint, rewardUser.publicKey);
+
+      // Fund and stake tokens
+      await mintTo(provider.connection, admin, stakingMint, rewardUserTokenAccount, admin, 500_000);
+
+      await program.methods
+        .stakesol(new BN(500_000))
+        .accounts({
+          user: rewardUser.publicKey,
+          userStake: rewardUserStakePda,
+          pool: poolPda,
+          userTokenAccount: rewardUserTokenAccount,
+          poolTokenVault: poolVault,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+        })
+        .signers([rewardUser])
+        .rpc();
+
+      console.log("Reward User:", rewardUser.publicKey.toBase58());
+      console.log("Reward User Stake PDA:", rewardUserStakePda.toBase58());
+      console.log("Reward Vault:", rewardVault.toBase58());
+    });
+
+    it("✅ User can claim rewards after staking", async () => {
+      // Wait to accumulate rewards
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      const initialRewardBalance = await getAccount(provider.connection, rewardUserRewardAccount);
+
+      await program.methods
+        .claimRewardsSol()
+        .accounts({
+          user: rewardUser.publicKey,
+          userStake: rewardUserStakePda,
+          pool: poolPda,
+          rewardVault,
+          userRewardAccount: rewardUserRewardAccount,
+          vaultAuthority,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .signers([rewardUser])
+        .rpc();
+
+      const finalRewardBalance = await getAccount(provider.connection, rewardUserRewardAccount);
+      const rewardsClaimed = Number(finalRewardBalance.amount) - Number(initialRewardBalance.amount);
+
+      expect(rewardsClaimed).to.be.greaterThan(0);
+      console.log("Rewards claimed:", rewardsClaimed);
+
+      const userStake = await program.account.userStakeAccount.fetch(rewardUserStakePda);
+      expect(userStake.rewardDebt.toNumber()).to.equal(0);
+    });
+
+    it("❌ Should fail claiming rewards with no staked tokens", async () => {
+      const noStakeUser = anchor.web3.Keypair.generate();
+      await provider.connection.requestAirdrop(noStakeUser.publicKey, 2e9);
+
+      const [noStakeUserPda] = await PublicKey.findProgramAddress(
+        [Buffer.from("stake"), noStakeUser.publicKey.toBuffer()],
+        program.programId
+      );
+
+      const noStakeRewardAccount = await createAccount(provider.connection, admin, rewardMint, noStakeUser.publicKey);
+
+      try {
+        await program.methods
+          .claimRewardsSol()
+          .accounts({
+            user: noStakeUser.publicKey,
+            userStake: noStakeUserPda,
+            pool: poolPda,
+            rewardVault,
+            userRewardAccount: noStakeRewardAccount,
+            vaultAuthority,
+            tokenProgram: TOKEN_PROGRAM_ID,
+          })
+          .signers([noStakeUser])
+          .rpc();
+
+        expect.fail("Expected claim rewards to fail for user with zero stake");
+      } catch (err: any) {
+        expect(err.toString()).to.include("AccountNotInitialized");
+      }
+    });
+
+    it("❌ Should fail with insufficient reward vault balance", async () => {
+      // Create empty reward vault
+      const emptyRewardVault = await createAccount(provider.connection, admin, rewardMint, vaultAuthority);
+
+      try {
+        await program.methods
+          .claimRewardsSol()
+          .accounts({
+            user: rewardUser.publicKey,
+            userStake: rewardUserStakePda,
+            pool: poolPda,
+            rewardVault: emptyRewardVault,
+            userRewardAccount: rewardUserRewardAccount,
+            vaultAuthority,
+            tokenProgram: TOKEN_PROGRAM_ID,
+          })
+          .signers([rewardUser])
+          .rpc();
+
+        expect.fail("Expected claim rewards to fail due to insufficient vault balance");
+      } catch (err: any) {
+        expect(err.toString()).to.include("insufficient");
+      }
+    });
   });
+
 });

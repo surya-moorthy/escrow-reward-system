@@ -6,7 +6,7 @@ use crate::{pool::PoolAccount, state::stake::UserStakeAccount};
 #[derive(Accounts)]
 pub struct ClaimRewards<'info> {
     #[account(mut, signer)]
-    pub user: AccountInfo<'info>,
+    pub user: Signer<'info>,
 
     #[account(mut, seeds = [b"stake", user.key().as_ref()], bump)]
     pub user_stake: Account<'info, UserStakeAccount>,
@@ -15,10 +15,14 @@ pub struct ClaimRewards<'info> {
     pub pool: Account<'info, PoolAccount>,
 
     #[account(mut)]
-    pub reward_vault: Account<'info, TokenAccount>, // where rewards are stored
+    pub reward_vault: Account<'info, TokenAccount>, // PDA's token account
 
     #[account(mut)]
     pub user_reward_account: Account<'info, TokenAccount>, // user destination
+
+    /// CHECK: Vault authority PDA signer
+    #[account(seeds = [b"vault_authority", pool.key().as_ref()], bump)]
+    pub vault_authority: UncheckedAccount<'info>,
 
     pub token_program: Program<'info, Token>,
 }
@@ -36,14 +40,24 @@ pub fn claim_rewards(ctx: Context<ClaimRewards>) -> Result<()> {
         .checked_mul(pool.reward_rate)
         .unwrap();
 
-    // Transfer rewards from vault to user
-    let cpi_accounts = Transfer {
-        from: ctx.accounts.reward_vault.to_account_info(),
-        to: ctx.accounts.user_reward_account.to_account_info(),
-        authority: pool.to_account_info(),
-    };
-    let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
-    token::transfer(cpi_ctx, rewards)?;
+    let (vault_authority, vault_authority_bump) =
+    Pubkey::find_program_address(&[b"vault_authority", pool.key().as_ref()], ctx.program_id);
+
+    let pool_key = pool.key();
+
+    let seeds = &[b"vault_authority", pool_key.as_ref(), &[vault_authority_bump]];
+        let signer = &[&seeds[..]];
+
+        let cpi_accounts = Transfer {
+            from: ctx.accounts.reward_vault.to_account_info(),
+            to: ctx.accounts.user_reward_account.to_account_info(),
+            authority: ctx.accounts.vault_authority.to_account_info(),
+        };
+
+        let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts)
+            .with_signer(signer);
+
+        token::transfer(cpi_ctx, rewards)?;
 
     user_stake.reward_debt = 0;
     user_stake.last_stake_time = now;
