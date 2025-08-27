@@ -5,8 +5,8 @@ use crate::{error::CustomError, pool::PoolAccount, state::stake::UserStakeAccoun
 
 #[derive(Accounts)]
 pub struct Stake<'info> {
-    #[account(mut, signer)]
-    pub user: AccountInfo<'info>,
+    #[account(mut)]
+    pub user: Signer<'info>,
 
     #[account(
         init_if_needed,
@@ -35,7 +35,7 @@ pub struct Stake<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
-pub fn stake(ctx: Context<Stake>, amount: u64) -> Result<()> {
+pub fn stake_handler(ctx: Context<Stake>, amount: u64) -> Result<()> {
     require!(amount > 0, CustomError::InvalidAmount);
 
     let user_stake = &mut ctx.accounts.user_stake;

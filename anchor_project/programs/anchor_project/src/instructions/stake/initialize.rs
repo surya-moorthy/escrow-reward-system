@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{Mint, Token};
+use anchor_spl::token::{Mint, Token, TokenAccount};
 
 use crate::pool::PoolAccount;
 
@@ -33,6 +33,16 @@ pub struct InitializePool<'info> {
         bump
     )]
     pub pool: Account<'info, PoolAccount>,
+
+    #[account(
+        init,
+        payer = admin,
+        seeds = [b"pool_vault", pool.key().as_ref()],
+        bump,
+        token::mint = staking_mint,
+        token::authority = pool
+    )]
+    pub pool_token_vault: Account<'info, TokenAccount>,
 
     /// Token that will be staked
     pub staking_mint: Account<'info, Mint>,

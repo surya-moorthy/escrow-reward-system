@@ -1,5 +1,5 @@
 pub mod initialize;
-pub mod stake;
+pub mod stake_event;
 
 pub use initialize::*;
-pub use stake::*;
+pub use stake_event::*;

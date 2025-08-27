@@ -19,5 +19,9 @@ pub mod anchor_project {
     pub fn initialize(ctx: Context<InitializePool>,reward_rate: u64) -> Result<()> {
         initialize::init_handler(ctx,reward_rate)
     }
+
+    pub fn stakesol(ctx: Context<Stake>, amount : u64) -> Result<()> {
+        stake_event::stake_handler(ctx, amount)
+    }
     
 }
