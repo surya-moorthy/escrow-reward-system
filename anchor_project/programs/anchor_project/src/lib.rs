@@ -1,36 +1,16 @@
-
-pub mod error;
-pub mod instructions;
-pub mod state;
-
 use anchor_lang::prelude::*;
 
-pub use instructions::*;
-
-pub use state::*;
-
-declare_id!("HqPFKnfyYcEVkPkfg883mhu2YgPMKWt7sZQTFmZRXAC9");
+declare_id!("GMrRNhm2zodYbHJgZWr1iyqiRn7ExpQCN6cDJe1BcsVX");
 
 #[program]
 pub mod anchor_project {
-
     use super::*;
 
-    pub fn initialize(ctx: Context<InitializePool>,reward_rate: u64) -> Result<()> {
-        initialize::init_handler(ctx,reward_rate)
+    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
+        msg!("Greetings from: {:?}", ctx.program_id);
+        Ok(())
     }
-
-    pub fn stakesol(ctx: Context<Stake>, amount : u64) -> Result<()> {
-        stake_event::stake_handler(ctx, amount)
-    }
-
-
-    pub fn unstakesol(ctx: Context<Unstake>, amount : u64) -> Result<()> {
-        unstake::unstake(ctx, amount)
-    }
-
-    pub fn claim_rewards_sol(ctx: Context<ClaimRewards>) -> Result<()> {
-          claimrewards::claim_rewards(ctx)
 }
-    
-}
+
+#[derive(Accounts)]
+pub struct Initialize {}
