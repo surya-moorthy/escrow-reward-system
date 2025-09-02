@@ -4,7 +4,12 @@ use crate::StakingPool;
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
-    #[account(init, payer = admin, space = 8 + StakingPool::LEN)]
+    #[account(
+        init,
+         payer = admin, 
+         space = 8 + StakingPool::LEN,
+         seeds = [b"staking-pool",admin.key().as_ref()],
+         bump)]
     pub staking_pool: Account<'info, StakingPool>,
 
     #[account(mut)]
