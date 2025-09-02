@@ -18,6 +18,7 @@ pub struct AddSupportedToken<'info> {
 pub fn add_supported_token_handler(
     ctx: Context<AddSupportedToken>,
     reward_rate: u64,
+    vault_bump: u8, // <-- pass bump when adding token
 ) -> Result<()> {
     let pool = &mut ctx.accounts.staking_pool;
 
@@ -34,6 +35,7 @@ pub fn add_supported_token_handler(
     pool.supported_tokens.push(SupportedToken {
         mint,
         vault,
+        vault_bump,   // store the bump
         reward_rate,
         total_staked: 0,
     });

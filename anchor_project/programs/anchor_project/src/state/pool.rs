@@ -10,6 +10,7 @@ pub struct StakingPool {
 pub struct SupportedToken {
     pub mint: Pubkey,     // token mint address (e.g. MYT)
     pub vault: Pubkey,    // PDA vault token account for escrow
+    pub vault_bump: u8,
     pub reward_rate: u64, // reward logic per token
     pub total_staked: u64 // total staked across all users for this mint
 }

@@ -23,7 +23,7 @@ pub struct Stake<'info> {
     seeds = [b"vault", staking_pool.key().as_ref(), mint.key().as_ref()],
     bump,
     token::mint = mint,
-    token::authority = staking_pool
+    token::authority = vault
     )]
     pub vault: Account<'info, TokenAccount>,                        // PDA escrow vault
 

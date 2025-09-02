@@ -23,7 +23,12 @@ pub mod anchor_project {
         stake::stake_handler(ctx, amount)
     }
 
-    pub fn add_supported_token(ctx: Context<AddSupportedToken>,reward_rate: u64,) -> Result<()> {
-        add_token::add_supported_token_handler(ctx, reward_rate)
+    pub fn add_supported_token(ctx: Context<AddSupportedToken>,reward_rate: u64,vault_bump : u8) -> Result<()> {
+        add_token::add_supported_token_handler(ctx, reward_rate,vault_bump)
     }
+
+    pub fn unstake(ctx: Context<Unstake>, amount: u64) -> Result<()> {
+        unstake::unstake_handler(ctx, amount)
+    }
+ 
 }

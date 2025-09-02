@@ -11,6 +11,9 @@ pub enum CustomError {
     #[msg("Insufficient token balance to stake")]
     InsufficientBalance,
 
+    #[msg("Insufficient staked amount")]
+    InsufficientStake,
+
     #[msg("Staking amount must be greater than zero")]
     InvalidAmount,
 
