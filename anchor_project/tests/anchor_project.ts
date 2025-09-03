@@ -3,7 +3,6 @@ import { Program } from "@coral-xyz/anchor";
 import { assert, expect } from "chai";
 import { AnchorProject } from "../target/types/anchor_project";
 import * as spl from "@solana/spl-token";
-import { Keypair, SystemProgram, LAMPORTS_PER_SOL } from "@solana/web3.js";
 
 const provider = anchor.AnchorProvider.env();
 anchor.setProvider(provider);
