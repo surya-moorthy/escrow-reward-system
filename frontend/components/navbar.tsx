@@ -11,15 +11,14 @@ import { useWallet } from "@solana/wallet-adapter-react" // use real wallet adap
 
 export function Navbar() {
   const pathname = usePathname()
-  const { connected, publicKey, connect, disconnect, wallet, select,wallets } = useWallet()
+  const { connected, publicKey, connect, disconnect, wallet, select, wallets } = useWallet()
 
   const walletAddress = useMemo(() => (publicKey ? publicKey.toBase58() : ""), [publicKey])
   const isConnected = connected
 
-  const connectWallet = async () => {
+  const connectWallet = async (walletName: string) => {
     try {
-      if (!wallets[0].adapter.name) return; 
-      await select(wallets[0].adapter.name);
+      await select(walletName);
       await connect()
     } catch (e) {
       // swallow for UX; surface via toast if desired
@@ -90,16 +89,37 @@ export function Navbar() {
 
             {/* Wallet Button/Dropdown */}
             {!isConnected ? (
-              <Button onClick={connectWallet} className="flex items-center space-x-2">
-                <Wallet className="h-4 w-4" />
-                <span>Connect Wallet</span>
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button className="flex items-center space-x-2">
+                    <Wallet className="h-4 w-4" />
+                    <span>Connect Wallet</span>
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  {wallets.map((wallet) => (
+                    <DropdownMenuItem
+                      key={wallet.adapter.name}
+                      onClick={() => connectWallet(wallet.adapter.name)}
+                      className="flex items-center space-x-2"
+                    >
+                      <img
+                        src={wallet.adapter.icon}
+                        alt={wallet.adapter.name}
+                        className="h-4 w-4"
+                      />
+                      <span>{wallet.adapter.name}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             ) : (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="flex items-center space-x-2 bg-transparent">
                     <Wallet className="h-4 w-4" />
-                        {truncateAddress(publicKey?.toString() as string)}
+                    {truncateAddress(publicKey?.toString() as string)}
                     <ChevronDown className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
