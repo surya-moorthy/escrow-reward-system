@@ -1,0 +1,30 @@
+{
+  "name": "Apple",
+  "symbol": "APP",
+  "description": "This is an Apple token",
+  "image": "https://raw.githubusercontent.com/surya-moorthy/escrow-reward-system/main/images/apple.png",
+  "attributes": [
+    {
+      "trait_type": "Category",
+      "value": "Utility"
+    },
+    {
+      "trait_type": "Generation",
+      "value": "1"
+    }
+  ],
+  "properties": {
+    "files": [
+      {
+        "uri": "https://raw.githubusercontent.com/surya-moorthy/escrow-reward-system/main/images/apple.png",
+        "type": "image/png"
+      }
+    ],
+    "creators": [
+      {
+        "address": "5XpKFjafCi7w53SJwyscb8hTir5r8EHANo57LvJcuQfH",
+        "share": 100000
+      }
+    ]
+  }
+}
